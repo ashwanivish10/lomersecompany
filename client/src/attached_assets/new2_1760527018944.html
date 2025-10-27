@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Service Invoice</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Inter:wght@400;500;700&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #e5e7eb; /* gray-200 */
+        }
+
+        /* Container for the invoice with a paper-like feel */
+        #invoice-container {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-width: 450px;
+            transition: background 0.3s ease-in-out;
+        }
+
+        /* Dashed border styles */
+        .dashed-border {
+            border-top: 2px dashed var(--border-color);
+            margin-top: 1.25rem; /* mt-5 */
+            margin-bottom: 1.25rem; /* mb-5 */
+            transition: border-color 0.3s ease-in-out;
+        }
+        
+        /* Make text fields editable */
+        [contenteditable="true"] {
+            outline: none;
+            cursor: text;
+        }
+        [contenteditable="true"]:focus {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+
+        /* Style for table headers */
+        .table-header {
+            font-weight: 600; /* semibold */
+            color: var(--text-color-dark);
+            padding-top: 0.5rem; /* py-2 */
+            padding-bottom: 0.5rem; /* py-2 */
+            transition: color 0.3s ease-in-out;
+        }
+        
+        .header-highlight {
+             background-color: var(--header-bg-color);
+             transition: background-color 0.3s ease-in-out;
+        }
+
+        /* Style for item rows */
+        #invoice-items tbody tr {
+            position: relative; /* Needed for positioning the delete button */
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #invoice-items tbody tr:last-child {
+            border-bottom: none;
+        }
+
+        /* Style for the hover-to-delete button */
+        .delete-item-btn {
+            position: absolute;
+            top: 50%;
+            right: 0.25rem;
+            transform: translateY(-50%);
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.2s ease-in-out;
+            background-color: transparent;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            font-size: 1.25rem; /* text-xl */
+            line-height: 1;
+            font-weight: bold; /* bold */
+            color: #ef4444; /* red-500 */
+        }
+
+        #invoice-items tbody tr:hover .delete-item-btn {
+            visibility: visible;
+            opacity: 1;
+        }
+        .delete-item-btn:hover {
+            color: #dc2626; /* red-600 */
+        }
+        
+        .thank-you-text {
+            font-family: 'Dancing Script', cursive;
+            font-size: 2.5rem; /* text-4xl */
+            color: var(--primary-color);
+            transform: rotate(-10deg);
+            opacity: 0.85;
+            transition: color 0.3s ease-in-out;
+        }
+
+        #client-presets {
+            color: #4b5563; /* gray-600 */
+            background-color: #f9fafb; /* gray-50 */
+            padding: 2px 4px;
+        }
+
+        /* --- THEME STYLES --- */
+        :root {
+            --primary-color: #f59e0b; /* yellow-500 */
+            --text-color-dark: #1f2937;   /* gray-800 */
+            --text-color-medium: #4b5B63; /* gray-600 */
+            --text-color-light: #6b7280;  /* gray-500 */
+            --border-color: #d1d5db;     /* gray-300 */
+            --header-bg-color: #f9fafb;  /* gray-50 */
+        }
+        
+        .primary-text { color: var(--primary-color); transition: color 0.3s ease-in-out; }
+        .text-level-1 { color: var(--text-color-dark); transition: color 0.3s ease-in-out; }
+        .text-level-2 { color: var(--text-color-medium); transition: color 0.3s ease-in-out; }
+        .text-level-3 { color: var(--text-color-light); transition: color 0.3s ease-in-out; }
+        
+        .theme-btn {
+            border: 2px solid #e5e7eb; /* gray-200 */
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s;
+            box-shadow: 0 1px 3px 0 rgba(0,0,0,.1), 0 1px 2px -1px rgba(0,0,0,.1);
+            position: relative;
+        }
+        .theme-btn:hover {
+            transform: scale(1.15);
+        }
+        .theme-btn.premium .star-icon, .theme-btn.curated .star-icon {
+            display: block;
+        }
+        .star-icon {
+            display: none;
+            position: absolute;
+            top: -6px;
+            right: -6px;
+            width: 12px;
+            height: 12px;
+            color: #f59e0b;
+        }
+        
+        .btn-themed {
+            background-color: var(--primary-color);
+            transition: filter 0.2s ease-in-out, background-color 0.3s;
+        }
+        .btn-themed:hover {
+            filter: brightness(0.9);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4 sm:p-6">
+
+    <div id="theme-selector" class="mb-6 flex flex-col justify-center items-center space-y-3 no-print p-3 bg-white rounded-lg shadow-sm">
+        <div>
+            <span class="text-xs font-medium text-gray-500 mr-2">Basic Themes:</span>
+            <button class="theme-btn w-6 h-6 rounded-full" data-theme="default" style="background-color: #f59e0b;"></button>
+            <button class="theme-btn w-6 h-6 rounded-full" data-theme="blue" style="background-color: #2563eb;"></button>
+            <button class="theme-btn w-6 h-6 rounded-full" data-theme="green" style="background-color: #16a34a;"></button>
+            <button class="theme-btn w-6 h-6 rounded-full" data-theme="purple" style="background-color: #4f46e5;"></button>
+        </div>
+        <div class="border-t w-full pt-3">
+             <span class="text-xs font-medium text-gray-500 mr-2">Premium (Dark) Themes:</span>
+            <button class="theme-btn premium w-6 h-6 rounded-full" data-theme="slate" style="background-color: #374151;">
+                 <svg class="star-icon" fill="currentColor" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+            <button class="theme-btn premium w-6 h-6 rounded-full" data-theme="ocean" style="background-color: #0c4a6e;">
+                <svg class="star-icon" fill="currentColor" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+            <button class="theme-btn premium w-6 h-6 rounded-full" data-theme="sunset" style="background-color: #7c2d12;">
+                <svg class="star-icon" fill="currentColor" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+        </div>
+        <div class="border-t w-full pt-3">
+             <span class="text-xs font-medium text-gray-500 mr-2">Professional Themes:</span>
+            <button class="theme-btn premium w-6 h-6 rounded-full" data-theme="mint" style="background-color: #f0fdfa; border-color: #14b8a6;">
+                 <svg class="star-icon" fill="#14b8a6" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+            <button class="theme-btn premium w-6 h-6 rounded-full" data-theme="lavender" style="background-color: #f5f3ff; border-color: #8b5cf6;">
+                 <svg class="star-icon" fill="#8b5cf6" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+            <button class="theme-btn premium w-6 h-6 rounded-full" data-theme="blush" style="background-color: #fff1f2; border-color: #f43f5e;">
+                 <svg class="star-icon" fill="#f43f5e" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+             <button class="theme-btn premium w-6 h-6 rounded-full" data-theme="graphite" style="background: linear-gradient(to bottom right, #f9fafb, #e5e7eb); border-color: #9ca3af;">
+                 <svg class="star-icon" fill="#3b82f6" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+        </div>
+        <div class="border-t w-full pt-3">
+             <span class="text-xs font-medium text-gray-500 mr-2">Curated Themes:</span>
+            <button class="theme-btn curated w-6 h-6 rounded-full" data-theme="seaside" style="background-image: linear-gradient(to right, #FAF8F1 50%, #34656D 50%); border-color: #FAEAB1;">
+                 <svg class="star-icon" fill="#334443" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+            <button class="theme-btn curated w-6 h-6 rounded-full" data-theme="vibrant" style="background-image: linear-gradient(to right, #E9E3DF 50%, #FF7A30 50%); border-color: #465C88;">
+                 <svg class="star-icon" fill="#000000" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+            <button class="theme-btn curated w-6 h-6 rounded-full" data-theme="pastel" style="background-image: linear-gradient(to right, #FAF7F3 50%, #D9A299 50%); border-color: #F0E4D3;">
+                 <svg class="star-icon" fill="#A07855" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+            <button class="theme-btn curated w-6 h-6 rounded-full" data-theme="rose" style="background-image: linear-gradient(to right, #EEEEEE 50%, #B9375D 50%); border-color: #E7D3D3;">
+                 <svg class="star-icon" fill="#D25D5D" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+             <button class="theme-btn curated w-6 h-6 rounded-full" data-theme="lime" style="background-image: linear-gradient(to right, #FFFADC 50%, #B6F500 50%); border-color: #A4DD00;">
+                 <svg class="star-icon" fill="#98CD00" viewBox="0 0 20 20"><path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/></svg>
+            </button>
+        </div>
+    </div>
+    
+    <div id="client-selector-container" class="mb-4 flex justify-center items-center space-x-2 no-print p-3 bg-white rounded-lg shadow-sm max-w-md w-full">
+        <span class="text-sm font-medium text-gray-600">Client Presets:</span>
+        <div class="flex items-center space-x-1">
+             <select id="client-presets" class="text-sm rounded border-gray-300 shadow-sm" title="Select a client"></select>
+             <button id="add-client-btn" title="Add New Client">
+                <svg class="w-5 h-5 text-blue-500 hover:text-blue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+             </button>
+             <button id="save-client-btn" title="Save Current Client">
+                 <svg class="w-5 h-5 text-green-500 hover:text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+             </button>
+             <button id="delete-client-btn" title="Delete Selected Client">
+                 <svg class="w-5 h-5 text-red-500 hover:text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+             </button>
+        </div>
+    </div>
+
+
+    <div id="invoice-container" class="bg-white p-8 rounded-lg w-full">
+        <!-- Header: Logo and Company Name -->
+        <header class="flex items-center mb-10">
+            <div class="relative group">
+                <img id="logo" src="https://placehold.co/64x64/f59e0b/FFFFFF?text=Logo" alt="Company Logo" class="h-16 w-16 object-contain mr-4">
+                <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full">
+                    <label for="logo-upload" class="cursor-pointer text-white text-xs text-center">Change</label>
+                    <input type="file" id="logo-upload" class="hidden" accept="image/*">
+                </div>
+            </div>
+            <div>
+                <h1 contenteditable="true" class="text-2xl font-bold primary-text">Bhookhad Baba</h1>
+                <p contenteditable="true" class="text-level-3">Tiffin Service</p>
+            </div>
+        </header>
+
+        <!-- Main Invoice Info -->
+        <main>
+            <div class="flex justify-between items-start mb-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-level-1 leading-tight">Food Service</h2>
+                    <h2 class="text-3xl font-bold text-level-1">Bill</h2>
+                </div>
+                <div class="text-right text-level-2 space-y-1">
+                    <p>Date: <span contenteditable="true">03/04/22</span></p>
+                    <p class="whitespace-nowrap">Invoice to : <span contenteditable="true" id="invoice-to-name">Monu</span></p>
+                    <p>Invoice no : <span contenteditable="true">#0001</span></p>
+                </div>
+            </div>
+
+            <div class="dashed-border"></div>
+
+            <!-- Invoice Items Table -->
+            <table id="invoice-items" class="w-full text-left">
+                <thead>
+                    <tr class="header-highlight">
+                        <th class="table-header w-1/2 pl-2">DATE</th>
+                        <th class="table-header w-1/4 text-center">QTY</th>
+                        <th class="table-header w-1/4 text-right pr-2">PRICE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Items will be added here dynamically -->
+                </tbody>
+            </table>
+            
+            <div class="flex justify-start mt-2 no-print">
+                <button id="add-item-btn" class="text-sm text-blue-500 hover:text-blue-700 font-semibold">+ Add Item</button>
+            </div>
+
+
+            <div class="dashed-border"></div>
+
+            <!-- Totals Section -->
+            <div class="flex justify-between items-center mt-6">
+                <div class="w-1/2 flex justify-center items-center">
+                    <p class="thank-you-text">Thank You!</p>
+                </div>
+                <div class="w-1/2 text-level-2">
+                    <div class="flex justify-between mb-2">
+                        <span>TOTAL TIFFIN:</span>
+                        <span id="total-tiffin">5</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span>TOTAL AMOUNT:</span>
+                        <span id="total-amount">₹36.15</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span>AMOUNT PAID:</span>
+                        <span contenteditable="true" id="amount-paid">₹2.50</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span>TAX :</span>
+                        <span contenteditable="true" id="tax">0%</span>
+                    </div>
+                    <div class="flex justify-between font-bold text-lg text-level-1">
+                        <span>AMOUNT DUE:</span>
+                        <span id="amount-due">₹33.65</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dashed-border mt-8"></div>
+            
+            <!-- Footer with Address and Phone -->
+            <footer class="pt-4 text-level-2 text-xs">
+                <div class="flex items-start">
+                    <svg class="w-4 h-4 mr-3 flex-shrink-0 mt-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                    </svg>
+                    <p>Shop No. 8, First Floor, Aarcity Market, Sector 16C, Gaur City 2, Greater Noida, Ghaziabad, Uttar Pradesh 201009</p>
+                </div>
+                <div class="flex items-center mt-3">
+                    <svg class="w-4 h-4 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 6.75z" />
+                    </svg>
+                    <p>8826513777</p>
+                </div>
+            </footer>
+        </main>
+    </div>
+
+
+    <!-- Buttons -->
+    <div class="mt-8 text-center flex justify-center space-x-4">
+        <button id="upload-excel-btn" class="bg-green-600 text-white font-bold py-2 px-6 rounded-lg shadow-lg hover:bg-green-700 transition-colors">
+            Upload Excel
+        </button>
+        <button id="download-pdf-btn" class="btn-themed text-white font-bold py-2 px-6 rounded-lg shadow-lg transition-colors">
+            Download PDF
+        </button>
+        <input type="file" id="excel-upload" class="hidden" accept=".xlsx, .xls, .csv">
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const logoUpload = document.getElementById('logo-upload');
+            const logo = document.getElementById('logo');
+            const addItemBtn = document.getElementById('add-item-btn');
+            const itemsTbody = document.querySelector('#invoice-items tbody');
+            const downloadPdfBtn = document.getElementById('download-pdf-btn');
+            const uploadExcelBtn = document.getElementById('upload-excel-btn');
+            const excelUpload = document.getElementById('excel-upload');
+            const totalTiffinSpan = document.getElementById('total-tiffin');
+            const totalAmountSpan = document.getElementById('total-amount');
+            const amountPaidSpan = document.getElementById('amount-paid');
+            const amountDueSpan = document.getElementById('amount-due');
+            const taxSpan = document.getElementById('tax');
+            const themeButtons = document.querySelectorAll('.theme-btn');
+            const root = document.documentElement;
+            const invoiceContainer = document.getElementById('invoice-container');
+            
+            // Client Preset Elements
+            const invoiceToName = document.getElementById('invoice-to-name');
+            const clientPresets = document.getElementById('client-presets');
+            const addClientBtn = document.getElementById('add-client-btn');
+            const saveClientBtn = document.getElementById('save-client-btn');
+            const deleteClientBtn = document.getElementById('delete-client-btn');
+
+
+            const themes = {
+                // Basic Themes
+                default: { type: 'color', pageBg: 'white', primary: '#f59e0b', textDark: '#1f2937', textMedium: '#4b5563', textLight: '#6b7280', border: '#d1d5db', headerBg: '#f9fafb' },
+                blue:    { type: 'color', pageBg: 'white', primary: '#2563eb', textDark: '#1f2937', textMedium: '#4b5563', textLight: '#6b7280', border: '#d1d5db', headerBg: '#f9fafb' },
+                green:   { type: 'color', pageBg: 'white', primary: '#16a34a', textDark: '#1f2937', textMedium: '#4b5563', textLight: '#6b7280', border: '#d1d5db', headerBg: '#f9fafb' },
+                purple:  { type: 'color', pageBg: 'white', primary: '#4f46e5', textDark: '#1f2937', textMedium: '#4b5563', textLight: '#6b7280', border: '#d1d5db', headerBg: '#f9fafb' },
+                // Premium Themes (Dark)
+                slate:   { type: 'color', pageBg: '#374151', primary: '#9ca3af', textDark: '#f9fafb', textMedium: '#d1d5db', textLight: '#9ca3af', border: '#4b5563', headerBg: '#4b5563' },
+                ocean:   { type: 'color', pageBg: '#0c4a6e', primary: '#7dd3fc', textDark: '#f0f9ff', textMedium: '#e0f2fe', textLight: '#bae6fd', border: '#0369a1', headerBg: '#075985' },
+                sunset:  { type: 'color', pageBg: '#7c2d12', primary: '#fdba74', textDark: '#fff7ed', textMedium: '#ffedd5', textLight: '#fed7aa', border: '#9a3412', headerBg: '#9a3412' },
+                // Professional Themes (Light & Sophisticated)
+                mint:    { type: 'color', pageBg: '#f0fdfa', primary: '#14b8a6', textDark: '#0f766e', textMedium: '#115e59', textLight: '#134e4a', border: '#ccfbf1', headerBg: 'rgba(204, 251, 241, 0.5)' },
+                lavender:{ type: 'color', pageBg: '#f5f3ff', primary: '#8b5cf6', textDark: '#5b21b6', textMedium: '#6d28d9', textLight: '#7c3aed', border: '#ede9fe', headerBg: 'rgba(237, 233, 254, 0.5)' },
+                blush:   { type: 'color', pageBg: '#fff1f2', primary: '#f43f5e', textDark: '#be123c', textMedium: '#9f1239', textLight: '#881337', border: '#ffe4e6', headerBg: 'rgba(255, 228, 230, 0.5)' },
+                graphite:{ type: 'gradient', pageBg: 'linear-gradient(to bottom right, #f9fafb, #e5e7eb)', primary: '#3b82f6', textDark: '#1f2937', textMedium: '#4b5563', textLight: '#6b7280', border: '#d1d5db', headerBg: 'rgba(255,255,255,0.5)' },
+                // Curated Themes
+                seaside: { type: 'color', pageBg: '#FAF8F1', primary: '#34656D', textDark: '#334443', textMedium: '#34656D', textLight: '#34656D', border: '#FAEAB1', headerBg: 'rgba(250, 234, 177, 0.3)' },
+                vibrant: { type: 'color', pageBg: '#E9E3DF', primary: '#FF7A30', textDark: '#000000', textMedium: '#465C88', textLight: '#465C88', border: '#465C88', headerBg: 'rgba(70, 92, 136, 0.1)' },
+                pastel:  { type: 'color', pageBg: '#FAF7F3', primary: '#D9A299', textDark: '#A07855', textMedium: '#D9A299', textLight: '#DCC5B2', border: '#F0E4D3', headerBg: 'rgba(240, 228, 211, 0.4)' },
+                rose:    { type: 'color', pageBg: '#EEEEEE', primary: '#B9375D', textDark: '#B9375D', textMedium: '#D25D5D', textLight: '#D25D5D', border: '#E7D3D3', headerBg: 'rgba(231, 211, 211, 0.4)' },
+                lime:    { type: 'color', pageBg: '#FFFADC', primary: '#B6F500', textDark: '#98CD00', textMedium: '#A4DD00', textLight: '#A4DD00', border: '#B6F500', headerBg: 'rgba(182, 245, 0, 0.2)' },
+            };
+
+            themeButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const themeName = button.dataset.theme;
+                    const selectedTheme = themes[themeName];
+                    if (selectedTheme) {
+                        if (selectedTheme.type === 'gradient') {
+                            invoiceContainer.style.background = selectedTheme.pageBg;
+                        } else {
+                            invoiceContainer.style.background = ''; // Clear gradient
+                            invoiceContainer.style.backgroundColor = selectedTheme.pageBg;
+                        }
+                        
+                        root.style.setProperty('--primary-color', selectedTheme.primary);
+                        root.style.setProperty('--text-color-dark', selectedTheme.textDark);
+                        root.style.setProperty('--text-color-medium', selectedTheme.textMedium);
+                        root.style.setProperty('--text-color-light', selectedTheme.textLight);
+                        root.style.setProperty('--border-color', selectedTheme.border);
+                        root.style.setProperty('--header-bg-color', selectedTheme.headerBg);
+                    }
+                });
+            });
+
+            const initialItems = [
+                { date: '11 Oct 2025', qty: '1', price: '₹3.99' },
+                { date: '11 Oct 2025', qty: '1', price: '₹5.99' },
+                { date: '11 Oct 2025', qty: '1', price: '₹5.99' },
+                { date: '11 Oct 2025', qty: '1', price: '₹10.09' },
+                { date: '11 Oct 2025', qty: '1', price: '₹10.09' }
+            ];
+
+            const updateTotals = () => {
+                let totalTiffins = 0;
+                itemsTbody.querySelectorAll('td:nth-child(2)').forEach(cell => {
+                    const qtyValue = parseInt(cell.textContent.trim(), 10);
+                    if (!isNaN(qtyValue)) totalTiffins += qtyValue;
+                });
+                totalTiffinSpan.textContent = totalTiffins;
+
+                let totalAmount = 0;
+                itemsTbody.querySelectorAll('td:nth-child(3) span').forEach(span => {
+                    const priceValue = parseFloat(span.textContent.replace('₹', '').trim());
+                    if (!isNaN(priceValue)) totalAmount += priceValue;
+                });
+                totalAmountSpan.textContent = `₹${totalAmount.toFixed(2)}`;
+
+                const paidValue = parseFloat(amountPaidSpan.textContent.replace('₹', '').trim());
+                const amountPaid = !isNaN(paidValue) ? paidValue : 0;
+                const amountDue = totalAmount - amountPaid;
+                amountDueSpan.textContent = `₹${amountDue.toFixed(2)}`;
+            };
+
+            const createItemRow = (item = { date: 'New Item Date', qty: '1', price: '₹0.00' }) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td contenteditable="true" class="py-2 pl-2">${item.date}</td>
+                    <td contenteditable="true" class="py-2 text-center">${item.qty}</td>
+                    <td class="py-2 text-right pr-2">
+                        <span contenteditable="true">${item.price}</span>
+                    </td>
+                    <button class="delete-item-btn no-print">×</button>
+                `;
+                itemsTbody.appendChild(row);
+            };
+
+            initialItems.forEach(createItemRow);
+            updateTotals();
+
+            const observer = new MutationObserver(updateTotals);
+            observer.observe(itemsTbody, { childList: true, subtree: true, characterData: true });
+            
+            [itemsTbody, amountPaidSpan, taxSpan].forEach(el => el.addEventListener('input', updateTotals));
+
+            itemsTbody.addEventListener('click', (event) => {
+                if (event.target.classList.contains('delete-item-btn')) {
+                    event.target.closest('tr').remove();
+                }
+            });
+
+            logoUpload.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => { logo.src = e.target.result; };
+                    reader.readAsDataURL(file);
+                }
+            });
+
+            addItemBtn.addEventListener('click', () => createItemRow());
+            
+            uploadExcelBtn.addEventListener('click', () => excelUpload.click());
+
+            excelUpload.addEventListener('change', (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array', cellDates:true });
+                        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                        if(jsonData.length === 0) throw new Error("Excel sheet is empty or invalid.");
+                        
+                        itemsTbody.innerHTML = '';
+                        let itemsAdded = 0;
+
+                        jsonData.forEach(item => {
+                            const dateKey = Object.keys(item).find(k => k.toLowerCase() === 'date');
+                            const qtyKey = Object.keys(item).find(k => k.toLowerCase() === 'qty');
+                            const priceKey = Object.keys(item).find(k => k.toLowerCase() === 'price');
+
+                            if (!dateKey || !qtyKey || !priceKey) return; 
+                            
+                            let dateValue = item[dateKey];
+                            if (dateValue instanceof Date) {
+                               dateValue = dateValue.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                            }
+
+                            const priceValue = typeof item[priceKey] === 'number' 
+                                ? `₹${item[priceKey].toFixed(2)}` 
+                                : String(item[priceKey]).startsWith('₹') ? item[priceKey] : `₹${item[priceKey]}`;
+
+                            createItemRow({ date: dateValue, qty: item[qtyKey], price: priceValue });
+                            itemsAdded++;
+                        });
+
+                        if (itemsAdded === 0) throw new Error("No valid items found. Ensure columns are DATE, QTY, PRICE.");
+                    } catch (error) {
+                        console.error("Error processing Excel file:", error);
+                        uploadExcelBtn.textContent = 'Upload Failed!';
+                        uploadExcelBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+                        setTimeout(() => {
+                            uploadExcelBtn.textContent = 'Upload Excel';
+                            uploadExcelBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                        }, 3000);
+                    } finally {
+                        event.target.value = '';
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            });
+
+            // --- Client Preset Logic ---
+            const getClients = () => JSON.parse(localStorage.getItem('invoiceClients')) || [];
+            const saveClients = (clients) => localStorage.setItem('invoiceClients', JSON.stringify(clients));
+
+            const populateClients = () => {
+                const clients = getClients();
+                clientPresets.innerHTML = '<option value="" selected disabled>Select Client</option>';
+                clients.forEach(client => {
+                    const option = document.createElement('option');
+                    option.value = client;
+                    option.textContent = client;
+                    clientPresets.appendChild(option);
+                });
+            };
+            
+            addClientBtn.addEventListener('click', () => {
+                const newClientName = prompt("Enter new client's name:");
+                if (newClientName && newClientName.trim() !== '') {
+                    const trimmedName = newClientName.trim();
+                    let clients = getClients();
+                    if (!clients.includes(trimmedName)) {
+                         clients.push(trimmedName);
+                         saveClients(clients);
+                         populateClients();
+                         clientPresets.value = trimmedName;
+                         // Trigger change event to update invoice name
+                         clientPresets.dispatchEvent(new Event('change'));
+                    } else {
+                        alert("Client already exists.");
+                    }
+                }
+            });
+
+            saveClientBtn.addEventListener('click', () => {
+                const clientName = invoiceToName.textContent.trim();
+                if (!clientName || clientName === "Monu" || clientName === "Client Name") { // Prevent saving default or empty names
+                     saveClientBtn.classList.add('animate-pulse', 'text-red-500');
+                     setTimeout(()=> saveClientBtn.classList.remove('animate-pulse', 'text-red-500'), 1500);
+                     return;
+                }
+                let clients = getClients();
+                if (!clients.includes(clientName)) {
+                    clients.push(clientName);
+                    saveClients(clients);
+                    populateClients();
+                    clientPresets.value = clientName;
+                }
+            });
+
+            deleteClientBtn.addEventListener('click', () => {
+                const clientNameToDelete = clientPresets.value;
+                if (!clientNameToDelete) return; // No client selected
+                let clients = getClients();
+                clients = clients.filter(client => client !== clientNameToDelete);
+                saveClients(clients);
+                populateClients();
+                if (invoiceToName.textContent.trim() === clientNameToDelete) {
+                    invoiceToName.textContent = "Client Name";
+                }
+            });
+
+            clientPresets.addEventListener('change', () => {
+                if (clientPresets.value) {
+                    invoiceToName.textContent = clientPresets.value;
+                }
+            });
+            // End of Client Preset Logic
+
+            downloadPdfBtn.addEventListener('click', () => {
+                const filename = `invoice to ${document.getElementById('invoice-to-name').textContent.trim() || 'invoice'}.pdf`;
+                const elementsToHide = document.querySelectorAll('.no-print');
+                
+                elementsToHide.forEach(el => el.style.visibility = 'hidden');
+                const originalShadow = invoiceContainer.style.boxShadow;
+                invoiceContainer.style.boxShadow = 'none';
+
+                html2canvas(invoiceContainer, { 
+                    scale: 2.5, 
+                    useCORS: true,
+                    backgroundColor: null
+                }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/jpeg', 0.85);
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: [canvas.width, canvas.height] });
+                    pdf.addImage(imgData, 'JPEG', 0, 0, canvas.width, canvas.height, undefined, 'FAST');
+                    pdf.save(filename);
+                }).catch(err => {
+                    console.error("Error generating PDF:", err);
+                }).finally(() => {
+                    elementsToHide.forEach(el => el.style.visibility = 'visible');
+                    invoiceContainer.style.boxShadow = originalShadow;
+                });
+            });
+
+            // Initial load for clients
+            populateClients();
+        });
+    </script>
+</body>
+</html>
+
