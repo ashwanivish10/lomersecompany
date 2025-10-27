@@ -10,7 +10,7 @@ export type { InvoiceData };
 import TemplateClassic from './invoice-templates/TemplateClassic';
 import TemplateModern from './invoice-templates/TemplateModern';
 import TemplateMinimal from './invoice-templates/TemplateMinimal';
-import TemplateBhookhadBaba from './invoice-templates/TemplateBhookhadBaba';
+// import TemplateBhookhadBaba from './invoice-templates/TemplateBhookhadBaba';
 
 // Mock Data (agar data prop null ho toh yeh fallback ki tarah kaam karega)
 const mockInvoiceData: InvoiceData = {
